@@ -41,7 +41,6 @@ class StrataModule: NSObject {
                           reject: @escaping RCTPromiseRejectBlock) {
         DispatchQueue.main.async {
             let screen = UIScreen.main
-            let device = UIDevice.current
             
             let result: [String: Any] = [
                 "platform": "ios",
@@ -65,21 +64,23 @@ class StrataModule: NSObject {
     func triggerHaptics(_ intensity: String,
                         resolve: @escaping RCTPromiseResolveBlock,
                         reject: @escaping RCTPromiseRejectBlock) {
-        let generator: UIImpactFeedbackGenerator
-        
-        switch intensity {
-        case "heavy":
-            generator = UIImpactFeedbackGenerator(style: .heavy)
-        case "light":
-            generator = UIImpactFeedbackGenerator(style: .light)
-        default:
-            generator = UIImpactFeedbackGenerator(style: .medium)
+        DispatchQueue.main.async {
+            let generator: UIImpactFeedbackGenerator
+            
+            switch intensity {
+            case "heavy":
+                generator = UIImpactFeedbackGenerator(style: .heavy)
+            case "light":
+                generator = UIImpactFeedbackGenerator(style: .light)
+            default:
+                generator = UIImpactFeedbackGenerator(style: .medium)
+            }
+            
+            generator.prepare()
+            generator.impactOccurred()
+            
+            resolve(nil)
         }
-        
-        generator.prepare()
-        generator.impactOccurred()
-        
-        resolve(nil)
     }
     
     private func getDeviceType() -> String {
@@ -94,7 +95,8 @@ class StrataModule: NSObject {
     }
     
     private func getSafeAreaInsets() -> [String: CGFloat] {
-        guard let window = UIApplication.shared.windows.first else {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
             return ["top": 0, "right": 0, "bottom": 0, "left": 0]
         }
         
