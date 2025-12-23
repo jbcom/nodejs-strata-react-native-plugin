@@ -1,27 +1,38 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
 lib/
+android/build/
+android/.gradle/
+ios/build/
+ios/Pods/
+
+# Logs
 *.log
-.DS_Store
-.cursor/
+npm-debug.log*
+pnpm-debug.log*
 
-# Coverage reports
-coverage/
-*.lcov
-
-# IDE files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.iml
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
 
 # React Native
 .expo/
 .expo-shared/
+ios/.xcode.env.local
+*.xcworkspace/
 
 # Build artifacts
-android/app/build/
-ios/build/
 *.ipa
 *.apk
 

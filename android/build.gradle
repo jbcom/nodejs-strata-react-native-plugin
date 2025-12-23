@@ -1,14 +1,12 @@
 buildscript {
-    ext.safeExtGet = {prop, fallback ->
-        rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
-    }
+    ext.kotlin_version = '1.9.0'
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
         classpath "com.android.tools.build:gradle:8.1.1"
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.10"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
 
@@ -20,11 +18,11 @@ def getExtOrDefault(name) {
 }
 
 android {
-    namespace "com.jbcom.strata"
+    namespace "com.strata.reactnative"
     compileSdkVersion getExtOrDefault("compileSdkVersion") ?: 34
 
     defaultConfig {
-        minSdkVersion getExtOrDefault("minSdkVersion") ?: 21
+        minSdkVersion getExtOrDefault("minSdkVersion") ?: 24
         targetSdkVersion getExtOrDefault("targetSdkVersion") ?: 34
     }
 
@@ -39,28 +37,22 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = '17'
     }
 }
 
 repositories {
-    mavenLocal()
-    maven {
-        // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
-        url("$projectDir/../node_modules/react-native/android")
-    }
     google()
     mavenCentral()
 }
 
 dependencies {
-    //noinspection GradleDynamicVersion
-    implementation "com.facebook.react:react-android:+"
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.10"
+    implementation 'com.facebook.react:react-native:0.73.0'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
     implementation "androidx.core:core-ktx:1.9.0"
 }
