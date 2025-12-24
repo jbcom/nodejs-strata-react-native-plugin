@@ -95,7 +95,6 @@ class StrataModule: NSObject {
     }
     
     private func getSafeAreaInsets() -> [String: CGFloat] {
-    private func getSafeAreaInsets() -> [String: CGFloat] {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let window = windowScene.windows.first else {
             return ["top": 0, "right": 0, "bottom": 0, "left": 0]
