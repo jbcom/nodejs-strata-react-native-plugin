@@ -48,16 +48,20 @@ jobs:
     
     steps:
       - name: Check required secrets
+        id: check_secrets
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
           if [[ -z "$OLLAMA_API_KEY" ]]; then
-            echo "::error::OLLAMA_API_KEY secret is not configured"
-            exit 1
+            echo "::warning::OLLAMA_API_KEY secret is not configured. Review will be skipped."
+            echo "has_secret=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_secret=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        if: steps.check_secrets.outputs.has_secret == 'true'
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -65,12 +69,14 @@ jobs:
           token: ${{ secrets.CI_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Get PR diff
+        if: steps.check_secrets.outputs.has_secret == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr diff ${{ github.event.pull_request.number }} --color=never > /tmp/pr_diff.txt
 
       - name: Generate structured review
+        if: steps.check_secrets.outputs.has_secret == 'true'
         id: review
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
@@ -166,7 +172,7 @@ jobs:
           echo "auto_apply=$(jq -r '.auto_apply' /tmp/review.json)" >> $GITHUB_OUTPUT
 
       - name: Apply safe fixes
-        if: steps.review.outputs.auto_apply == 'true'
+        if: steps.check_secrets.outputs.has_secret == 'true' && steps.review.outputs.auto_apply == 'true'
         run: |
           jq -c '.fixes[]' /tmp/review.json | while read -r fix; do
             FILE=$(echo "$fix" | jq -r '.file')
@@ -192,13 +198,14 @@ jobs:
           done
 
       - name: Commit fixes
-        if: steps.review.outputs.auto_apply == 'true'
-        uses: stefanzweifel/git-auto-commit-action@v5
+        if: steps.check_secrets.outputs.has_secret == 'true' && steps.review.outputs.auto_apply == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "fix: auto-apply safe improvements (Ollama)"
           branch: ${{ github.head_ref }}
 
       - name: Submit review
+        if: steps.check_secrets.outputs.has_secret == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -208,16 +215,16 @@ jobs:
           ISSUES=$(jq '.issues | length' /tmp/review.json)
           
           BODY="## 🤖 Ollama Code Review
-
+          
           **Summary:** $SUMMARY
-
+          
           | Score | Issues | Recommendation |
           |-------|--------|----------------|
           | $SCORE/10 | $ISSUES | $REC |
-
+          
           <details>
           <summary>Details</summary>
-
+          
           \`\`\`json
           $(cat /tmp/review.json)
           \`\`\`
@@ -231,6 +238,7 @@ jobs:
             -f body="$BODY" -f event="$EVENT" || gh pr comment ${{ github.event.pull_request.number }} --body "$BODY"
 
       - name: Upload review artifact
+        if: steps.check_secrets.outputs.has_secret == 'true'
         uses: actions/upload-artifact@v6
         with:
           name: ollama-review
@@ -249,7 +257,7 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -262,7 +270,7 @@ jobs:
         run: git checkout "$HEAD_REF"
 
       - name: Download review artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ollama-review
           path: /tmp
@@ -384,7 +392,7 @@ jobs:
 
       - name: Commit fixes
         if: steps.resolve.outputs.fix_count != '0'
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "fix: self-resolve review issues (Ollama)"
           branch: ${{ github.head_ref }}
@@ -442,12 +450,12 @@ jobs:
   copilot-autofix:
     name: Apply Copilot Autofix
     needs: initial-review
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && secrets.OLLAMA_API_KEY != ''
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -600,27 +608,19 @@ jobs:
     # Triggers on any AI bot feedback INCLUDING our own (github-actions[bot])
     # Loop prevention is handled in the "Collect all AI feedback" step by filtering out resolution summaries
     if: |
-      (github.event_name == 'pull_request_review' && 
+      (secrets.OLLAMA_API_KEY != '') &&
+      ((github.event_name == 'pull_request_review' && 
        contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.actor)) ||
       (github.event_name == 'pull_request_review_comment' &&
        contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.event.comment.user.login)) ||
       (github.event_name == 'issue_comment' && 
        github.event.issue.pull_request &&
-       contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.event.comment.user.login))
+       contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.event.comment.user.login)))
     runs-on: ubuntu-latest
     
     steps:
-      - name: Check required secrets
-        env:
-          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
-        run: |
-          if [[ -z "$OLLAMA_API_KEY" ]]; then
-            echo "::error::OLLAMA_API_KEY secret is not configured"
-            exit 1
-          fi
-
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           # Use CI_GITHUB_TOKEN to allow commits to trigger workflows
@@ -797,7 +797,7 @@ jobs:
           done
 
       - name: Commit fixes
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "fix: resolve AI feedback (automated)"
           branch: ${{ steps.pr.outputs.head_ref }}
