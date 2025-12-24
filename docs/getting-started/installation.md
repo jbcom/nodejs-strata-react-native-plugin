@@ -2,32 +2,40 @@
 
 ## Requirements
 
-- Python 3.9+
-- [uv](https://docs.astral.sh/uv/) (recommended) or pip
+- React Native >= 0.72.0
+- iOS 12.4+
+- Android SDK 21+
 
-## Install from PyPI
+## Install Package
 
 ```bash
-# Using uv (recommended)
-uv add PACKAGE_NAME
+# Using npm
+npm install @jbcom/strata-react-native-plugin
 
-# Using pip
-pip install PACKAGE_NAME
+# Using yarn
+yarn add @jbcom/strata-react-native-plugin
 ```
 
-## Install from Source
+## Native Setup
+
+### iOS
+
+After installing the package, install the pods:
 
 ```bash
-git clone https://github.com/jbcom/PACKAGE_NAME.git
-cd PACKAGE_NAME
-uv sync
+cd ios
+pod install
+cd ..
 ```
 
-## Development Installation
+### Android
+
+No additional setup is required for Android. The plugin is automatically linked.
+
+## Peer Dependencies
+
+Ensure you have the following peer dependencies installed:
 
 ```bash
-# Clone and install with dev dependencies
-git clone https://github.com/jbcom/PACKAGE_NAME.git
-cd PACKAGE_NAME
-uv sync --extra dev --extra docs
+npm install react react-native @jbcom/strata
 ```

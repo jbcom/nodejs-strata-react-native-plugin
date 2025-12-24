@@ -1,21 +1,90 @@
 # Quickstart
 
-This guide will help you get started with PACKAGE_NAME.
+This guide will help you get started with `@jbcom/strata-react-native-plugin`.
 
 ## Basic Usage
 
-```python
-from PACKAGE_NAME import Processor
+### Using the Device Profile
 
-# Initialize the processor
-processor = Processor()
+```tsx
+import { useDevice } from '@jbcom/strata-react-native-plugin';
 
-# Process data
-result = processor.process("example_data")
-print(f"Result: {result}")
+function GameScreen() {
+  const device = useDevice();
+
+  return (
+    <View>
+      <Text>Platform: {device.platform}</Text>
+      <Text>Orientation: {device.orientation}</Text>
+      <Text>Performance Mode: {device.performanceMode}</Text>
+    </View>
+  );
+}
 ```
 
-## Next Steps
+### Handling Input
 
-- Check out the [API Reference](../api/index.rst) for detailed documentation
-- See [Contributing](../development/contributing.md) to help improve this project
+Wrap your game view with `StrataInputProvider` to capture touches:
+
+```tsx
+import { StrataInputProvider, InputSnapshot } from '@jbcom/strata-react-native-plugin';
+
+function MyGame() {
+  const handleInput = (snapshot: InputSnapshot) => {
+    // Send input to your game engine (e.g., React Three Fiber)
+    console.log('Touches:', snapshot.touches.length);
+  };
+
+  return (
+    <StrataInputProvider onInput={handleInput}>
+      <YourGameView />
+    </StrataInputProvider>
+  );
+}
+```
+
+### Haptic Feedback
+
+```tsx
+import { useHaptics } from '@jbcom/strata-react-native-plugin';
+
+function ActionButton() {
+  const { trigger } = useHaptics();
+
+  const onPress = async () => {
+    await trigger({ intensity: 'medium' });
+    // Perform action
+  };
+
+  return <Button title="Trigger" onPress={onPress} />;
+}
+```
+
+### Orientation Control
+
+```tsx
+import { setOrientation } from '@jbcom/strata-react-native-plugin';
+
+async function lockLandscape() {
+  await setOrientation('landscape');
+}
+```
+
+## Usage with React Three Fiber
+
+The plugin is designed to work seamlessly with `@react-three/fiber`:
+
+```tsx
+import { Canvas } from '@react-three/fiber';
+import { StrataInputProvider } from '@jbcom/strata-react-native-plugin';
+
+export default function App() {
+  return (
+    <StrataInputProvider>
+      <Canvas>
+        <Your3DScene />
+      </Canvas>
+    </StrataInputProvider>
+  );
+}
+```
