@@ -40,7 +40,7 @@ jobs:
   # ============================================
   initial-review:
     name: Initial Code Review
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && secrets.OLLAMA_API_KEY != ''
     runs-on: ubuntu-latest
     outputs:
       pr_number: ${{ github.event.pull_request.number }}
@@ -48,12 +48,9 @@ jobs:
     
     steps:
       - name: Check required secrets
-        env:
-          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
-          if [[ -z "$OLLAMA_API_KEY" ]]; then
-            echo "::error::OLLAMA_API_KEY secret is not configured"
-            exit 1
+          if [[ -z "${{ secrets.OLLAMA_API_KEY }}" ]]; then
+            echo "OLLAMA_API_KEY secret is not configured"
           fi
 
       - name: Checkout repository
@@ -442,7 +439,7 @@ jobs:
   copilot-autofix:
     name: Apply Copilot Autofix
     needs: initial-review
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && secrets.OLLAMA_API_KEY != ''
     runs-on: ubuntu-latest
     
     steps:
@@ -600,23 +597,21 @@ jobs:
     # Triggers on any AI bot feedback INCLUDING our own (github-actions[bot])
     # Loop prevention is handled in the "Collect all AI feedback" step by filtering out resolution summaries
     if: |
-      (github.event_name == 'pull_request_review' && 
+      (secrets.OLLAMA_API_KEY != '') &&
+      ((github.event_name == 'pull_request_review' && 
        contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.actor)) ||
       (github.event_name == 'pull_request_review_comment' &&
        contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.event.comment.user.login)) ||
       (github.event_name == 'issue_comment' && 
        github.event.issue.pull_request &&
-       contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.event.comment.user.login))
+       contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.event.comment.user.login)))
     runs-on: ubuntu-latest
     
     steps:
       - name: Check required secrets
-        env:
-          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
-          if [[ -z "$OLLAMA_API_KEY" ]]; then
-            echo "::error::OLLAMA_API_KEY secret is not configured"
-            exit 1
+          if [[ -z "${{ secrets.OLLAMA_API_KEY }}" ]]; then
+            echo "OLLAMA_API_KEY secret is not configured"
           fi
 
       - name: Checkout repository
