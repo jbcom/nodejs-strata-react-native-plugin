@@ -40,7 +40,7 @@ jobs:
   # ============================================
   initial-review:
     name: Initial Code Review
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && secrets.OLLAMA_API_KEY != ''
     runs-on: ubuntu-latest
     outputs:
       pr_number: ${{ github.event.pull_request.number }}
@@ -208,16 +208,16 @@ jobs:
           ISSUES=$(jq '.issues | length' /tmp/review.json)
           
           BODY="## 🤖 Ollama Code Review
-
+          
           **Summary:** $SUMMARY
-
+          
           | Score | Issues | Recommendation |
           |-------|--------|----------------|
           | $SCORE/10 | $ISSUES | $REC |
-
+          
           <details>
           <summary>Details</summary>
-
+          
           \`\`\`json
           $(cat /tmp/review.json)
           \`\`\`
@@ -262,7 +262,7 @@ jobs:
         run: git checkout "$HEAD_REF"
 
       - name: Download review artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ollama-review
           path: /tmp
@@ -442,7 +442,7 @@ jobs:
   copilot-autofix:
     name: Apply Copilot Autofix
     needs: initial-review
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && secrets.OLLAMA_API_KEY != ''
     runs-on: ubuntu-latest
     
     steps:
@@ -600,13 +600,14 @@ jobs:
     # Triggers on any AI bot feedback INCLUDING our own (github-actions[bot])
     # Loop prevention is handled in the "Collect all AI feedback" step by filtering out resolution summaries
     if: |
-      (github.event_name == 'pull_request_review' && 
+      ((github.event_name == 'pull_request_review' && 
        contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.actor)) ||
       (github.event_name == 'pull_request_review_comment' &&
        contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.event.comment.user.login)) ||
       (github.event_name == 'issue_comment' && 
        github.event.issue.pull_request &&
-       contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.event.comment.user.login))
+       contains(fromJSON('["github-actions[bot]","gemini-code-assist[bot]","copilot[bot]","amazon-q-developer[bot]","coderabbitai[bot]","cursor[bot]","github-advanced-security[bot]"]'), github.event.comment.user.login))) &&
+      secrets.OLLAMA_API_KEY != ''
     runs-on: ubuntu-latest
     
     steps:
@@ -797,6 +798,7 @@ jobs:
           done
 
       - name: Commit fixes
+        if: steps.analyze.outputs.fix_count != '0'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "fix: resolve AI feedback (automated)"
@@ -812,17 +814,17 @@ jobs:
           ACK_COUNT=$(jq '[.fixes[] | select(.action == "acknowledge")] | length' /tmp/fixes.json)
           
           BODY="## 🔄 AI Feedback Resolution
-
+          
           $SUMMARY
-
+          
           | Action | Count |
           |--------|-------|
           | Fixes Applied | $FIX_COUNT |
           | Acknowledged | $ACK_COUNT |
-
+          
           <details>
           <summary>Details</summary>
-
+          
           \`\`\`json
           $(cat /tmp/fixes.json)
           \`\`\`
