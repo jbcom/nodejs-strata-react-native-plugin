@@ -2,67 +2,90 @@
 
 React Native plugin for [Strata 3D](https://github.com/jbcom/nodejs-strata) - cross-platform input, device detection, and haptics for mobile games.
 
-> ⚠️ **Status: In Development** - This plugin is not yet functional. See [issues](https://github.com/jbcom/nodejs-strata-react-native-plugin/issues) for roadmap.
+## Features
 
-## Planned Features
-
-- **Device Detection**: Identify device type (phone, tablet, foldable)
-- **Input Handling**: Unified touch, keyboard, and gamepad input
-- **Haptic Feedback**: Cross-platform vibration with intensity control
-- **Safe Area**: Handle notches and system UI
-- **Orientation**: Track device orientation changes
+- **Device Detection**: identify device type (mobile, tablet), platform (iOS, Android, Web), and performance capabilities.
+- **Input Handling**: Unified touch input handling with `StrataInputProvider`.
+- **Haptic Feedback**: Cross-platform vibration with intensity control (iOS Taptic Engine, Android Vibrator).
+- **Safe Area Insets**: Native safe area detection for notches and system UI.
+- **Orientation**: Get and set screen orientation (portrait, landscape).
+- **Performance Mode**: Detect low power mode and hardware performance levels.
 
 ## Installation
 
 ```bash
-# Not yet published - coming soon
 npm install @jbcom/strata-react-native-plugin
 ```
 
-## API (Planned)
+### Native Setup
+
+#### iOS
+```bash
+cd ios && pod install
+```
+
+#### Android
+Automatically linked.
+
+## API Reference
+
+### Hooks
+
+#### `useDevice()`
+Returns the current `DeviceProfile`.
 
 ```typescript
-import { 
-  useDevice, 
-  useInput, 
-  useHaptics,
-  useControlHints 
-} from '@jbcom/strata-react-native-plugin';
-
-function Game() {
-  const device = useDevice();
-  const input = useInput();
-  const { trigger } = useHaptics();
-
-  // Device info
-  console.log(device.type); // 'mobile' | 'tablet' | 'foldable'
-  console.log(device.platform); // 'ios' | 'android'
-
-  // Input state
-  console.log(input.leftStick); // { x: 0, y: 0 }
-  console.log(input.buttons.jump); // boolean
-
-  // Haptic feedback
-  trigger({ intensity: 'medium' });
-}
+const { platform, deviceType, orientation, safeAreaInsets, performanceMode } = useDevice();
 ```
+
+#### `useInput()`
+Returns the current `InputSnapshot` (requires `StrataInputProvider`).
+
+```typescript
+const input = useInput();
+```
+
+#### `useHaptics()`
+Returns a trigger function for haptic feedback.
+
+```typescript
+const { trigger } = useHaptics();
+await trigger({ intensity: 'light' | 'medium' | 'heavy' });
+```
+
+#### `useControlHints()`
+Returns localized control hints based on current input mode.
+
+### Components
+
+#### `StrataInputProvider`
+Wraps your application to capture and process input events.
+
+```tsx
+<StrataInputProvider onInput={(snapshot) => handleInput(snapshot)}>
+  <GameView />
+</StrataInputProvider>
+```
+
+### Utilities
+
+#### `setOrientation(orientation)`
+Programs the device orientation.
+
+```typescript
+import { setOrientation } from '@jbcom/strata-react-native-plugin';
+await setOrientation('landscape');
+```
+
+## Documentation
+
+Full documentation is available in the [docs](./docs) directory.
 
 ## Related
 
 - [@jbcom/strata](https://github.com/jbcom/nodejs-strata) - Main library
-- [@jbcom/strata-capacitor-plugin](https://github.com/jbcom/nodejs-strata-capacitor-plugin) - Capacitor version (more complete)
+- [@jbcom/strata-capacitor-plugin](https://github.com/jbcom/nodejs-strata-capacitor-plugin) - Capacitor version
 - [@jbcom/strata-examples](https://github.com/jbcom/nodejs-strata-examples) - Example applications
-
-## Contributing
-
-Contributions welcome! This plugin needs:
-
-1. Native iOS module (Swift)
-2. Native Android module (Kotlin/Java)
-3. React Native bridge
-4. TypeScript API layer
-
-See issues for specific tasks.
 
 ## License
 
