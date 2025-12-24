@@ -52,15 +52,15 @@ jobs:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
           if [[ -z "$OLLAMA_API_KEY" ]]; then
-            echo "::error::OLLAMA_API_KEY secret is not configured"
-            exit 1
+            echo "::warning::OLLAMA_API_KEY secret is not configured. Skipping AI review."
+            exit 0
           fi
 
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.head_ref }}
           # Use CI_GITHUB_TOKEN to allow commits to trigger workflows
           token: ${{ secrets.CI_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
 
@@ -615,8 +615,8 @@ jobs:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
           if [[ -z "$OLLAMA_API_KEY" ]]; then
-            echo "::error::OLLAMA_API_KEY secret is not configured"
-            exit 1
+            echo "::warning::OLLAMA_API_KEY secret is not configured. Skipping AI feedback resolution."
+            exit 0
           fi
 
       - name: Checkout repository
