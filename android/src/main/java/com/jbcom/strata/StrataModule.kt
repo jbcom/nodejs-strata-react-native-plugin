@@ -2,22 +2,26 @@ package com.jbcom.strata
 
 import android.content.Context
 import android.content.res.Configuration
+import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.os.PowerManager
+import android.app.ActivityManager
 import android.view.InputDevice
 import android.view.WindowManager
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 
 class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext), LifecycleEventListener {
 
     private var isListening = false
-    private val gamepadState = Arguments.createMap()
     private val buttons = Arguments.createMap()
     private val leftStick = Arguments.createMap()
     private val rightStick = Arguments.createMap()
@@ -44,7 +48,13 @@ class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
     }
 
     override fun getName(): String {
-        return "Strata"
+        return "StrataReactNativePlugin"
+    }
+
+    override fun getConstants(): Map<String, Any>? {
+        val constants = mutableMapOf<String, Any>()
+        constants["platform"] = "android"
+        return constants
     }
 
     override fun onHostResume() {
@@ -61,9 +71,6 @@ class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
 
     private fun startListening() {
         if (isListening) return
-        // In a real implementation, we would hook into the Activity's events
-        // or attach listeners to the root view.
-        // For now, we'll mark it as listening.
         isListening = true
     }
 
@@ -90,7 +97,7 @@ class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
             profile.putString("platform", "android")
             
             // Input Mode (Default to touch, check for gamepads later)
-            profile.putString("inputMode", "touch")
+            profile.putString("inputMode", if (hasGamepadConnected()) "gamepad" else "touch")
             
             // Orientation
             val orientation = if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait"
@@ -103,13 +110,19 @@ class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
             profile.putDouble("screenHeight", metrics.heightPixels.toDouble() / metrics.density)
             profile.putDouble("pixelRatio", metrics.density.toDouble())
 
-            // Safe Area Insets (Initial values, might need more complex logic for dynamic updates)
+            // Safe Area Insets
             profile.putMap("safeAreaInsets", getSafeAreaInsetsMap())
 
             promise.resolve(profile)
         } catch (e: Exception) {
             promise.reject("ERR_DEVICE_PROFILE", e.message)
         }
+    }
+
+    // Compatibility method for getDeviceInfo
+    @ReactMethod
+    fun getDeviceInfo(promise: Promise) {
+        getDeviceProfile(promise)
     }
 
     @ReactMethod
@@ -139,7 +152,21 @@ class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
         promise.resolve(true)
     }
 
+    // Compatibility method for triggerHaptic(intensity)
     @ReactMethod
+    fun triggerHaptic(intensity: String, promise: Promise) {
+        val options = Arguments.createMap()
+        options.putString("intensity", intensity)
+        when (intensity) {
+            "light" -> options.putDouble("customIntensity", 0.3)
+            "medium" -> options.putDouble("customIntensity", 0.6)
+            "heavy" -> options.putDouble("customIntensity", 1.0)
+        }
+        triggerHaptics(options, promise)
+    }
+
+    @ReactMethod
+    @Synchronized
     fun getInputSnapshot(promise: Promise) {
         val snapshot = Arguments.createMap()
         snapshot.putDouble("timestamp", System.currentTimeMillis().toDouble())
@@ -181,7 +208,50 @@ class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
         promise.resolve(snapshot)
     }
 
+    @ReactMethod
+    fun setOrientation(orientation: String) {
+        val activity = currentActivity ?: return
+        val orientationConstant = when (orientation) {
+            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        activity.requestedOrientation = orientationConstant
+    }
+
+    @ReactMethod
+    fun getPerformanceMode(promise: Promise) {
+        val map = Arguments.createMap()
+        val context = reactApplicationContext
+        
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val isLowPowerMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            powerManager?.isPowerSaveMode ?: false
+        } else false
+
+        val mi = ActivityManager.MemoryInfo()
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        activityManager?.getMemoryInfo(mi)
+        
+        val mode = when {
+            isLowPowerMode || mi.totalMem < 2L * 1024 * 1024 * 1024 -> "low"
+            mi.totalMem < 4L * 1024 * 1024 * 1024 -> "medium"
+            else -> "high"
+        }
+
+        map.putString("mode", mode)
+        map.putBoolean("isLowPowerMode", isLowPowerMode)
+        map.putDouble("totalMemory", mi.totalMem.toDouble())
+        promise.resolve(map)
+    }
+
+    @ReactMethod
+    fun getSafeAreaInsets(promise: Promise) {
+        promise.resolve(getSafeAreaInsetsMap())
+    }
+
     // Methods to be called from MainActivity to update state
+    @Synchronized
     fun handleKeyEvent(event: KeyEvent) {
         val isDown = event.action == KeyEvent.ACTION_DOWN
         val button = when (event.keyCode) {
@@ -204,6 +274,7 @@ class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
         button?.let { buttons.putBoolean(it, isDown) }
     }
 
+    @Synchronized
     fun handleMotionEvent(event: MotionEvent) {
         if (event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK &&
             event.action == MotionEvent.ACTION_MOVE) {
@@ -221,7 +292,6 @@ class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
 
     private fun isFoldable(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Check for foldable features
             return reactApplicationContext.packageManager.hasSystemFeature("android.hardware.sensor.hinge_angle")
         }
         return false
@@ -243,40 +313,41 @@ class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
     }
 
     private fun getSafeAreaInsetsMap(): ReadableMap {
-        val insets = Arguments.createMap()
+        val insetsMap = Arguments.createMap()
         val density = reactApplicationContext.resources.displayMetrics.density
+        val activity = reactApplicationContext.currentActivity
         
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val windowManager = reactApplicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val windowInsets = windowManager.defaultDisplay.cutout?.let { cutout ->
-                // Basic implementation for display cutouts
-                insets.putDouble("top", cutout.safeInsetTop.toDouble() / density)
-                insets.putDouble("right", cutout.safeInsetRight.toDouble() / density)
-                insets.putDouble("bottom", cutout.safeInsetBottom.toDouble() / density)
-                insets.putDouble("left", cutout.safeInsetLeft.toDouble() / density)
-                return@let true
-            } ?: false
-            
-            if (!windowInsets) {
-                // Fallback to status bar height for top inset
-                val resourceId = reactApplicationContext.resources.getIdentifier("status_bar_height", "dimen", "android")
-                val statusBarHeight = if (resourceId > 0) {
-                    reactApplicationContext.resources.getDimensionPixelSize(resourceId).toDouble() / density
-                } else {
-                    0.0
-                }
-                insets.putDouble("top", statusBarHeight)
-                insets.putDouble("right", 0.0)
-                insets.putDouble("bottom", 0.0)
-                insets.putDouble("left", 0.0)
+        var insetsApplied = false
+        
+        if (activity != null) {
+            val windowInsets = ViewCompat.getRootWindowInsets(activity.window.decorView)
+            if (windowInsets != null) {
+                val cutoutInsets = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout())
+                insetsMap.putDouble("top", cutoutInsets.top.toDouble() / density)
+                insetsMap.putDouble("right", cutoutInsets.right.toDouble() / density)
+                insetsMap.putDouble("bottom", cutoutInsets.bottom.toDouble() / density)
+                insetsMap.putDouble("left", cutoutInsets.left.toDouble() / density)
+                insetsApplied = true
             }
-        } else {
-            insets.putDouble("top", 0.0)
-            insets.putDouble("right", 0.0)
-            insets.putDouble("bottom", 0.0)
-            insets.putDouble("left", 0.0)
         }
         
-        return insets
+        if (!insetsApplied || insetsMap.getDouble("top") == 0.0) {
+            val resourceId = reactApplicationContext.resources.getIdentifier("status_bar_height", "dimen", "android")
+            val statusBarHeight = if (resourceId > 0) {
+                reactApplicationContext.resources.getDimensionPixelSize(resourceId).toDouble() / density
+            } else {
+                0.0
+            }
+            if (!insetsApplied) {
+                insetsMap.putDouble("top", statusBarHeight)
+                insetsMap.putDouble("right", 0.0)
+                insetsMap.putDouble("bottom", 0.0)
+                insetsMap.putDouble("left", 0.0)
+            } else if (insetsMap.getDouble("top") == 0.0) {
+                insetsMap.putDouble("top", statusBarHeight)
+            }
+        }
+        
+        return insetsMap
     }
 }

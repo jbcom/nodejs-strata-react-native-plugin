@@ -83,27 +83,39 @@ export function useDevice(): DeviceProfile {
     const updateDeviceInfo = async () => {
       const { width, height } = Dimensions.get('window');
       
-      let nativeInfo = { deviceType: 'mobile', platform: Platform.OS };
+      let nativeInfo: any = { deviceType: 'mobile', platform: Platform.OS };
       let safeArea = { top: 0, right: 0, bottom: 0, left: 0 };
       let performance = { mode: 'high' };
 
       if (StrataReactNativePlugin) {
         try {
-          const [info, insets, perf] = await Promise.all([
-            StrataReactNativePlugin.getDeviceInfo(),
-            StrataReactNativePlugin.getSafeAreaInsets(),
-            StrataReactNativePlugin.getPerformanceMode()
-          ]);
-          nativeInfo = info;
-          safeArea = insets;
-          performance = perf;
+          // Use newer combined API if available
+          const profile = await (StrataReactNativePlugin.getDeviceProfile ? 
+            StrataReactNativePlugin.getDeviceProfile() : 
+            StrataReactNativePlugin.getDeviceInfo());
+          
+          nativeInfo = profile;
+          safeArea = profile.safeAreaInsets || { top: 0, right: 0, bottom: 0, left: 0 };
+          performance = { mode: profile.performanceMode || profile.mode || 'high' };
         } catch (e) {
-          console.error('Failed to get native device info', e);
+          try {
+            const [info, insets, perf] = await Promise.all([
+              StrataReactNativePlugin.getDeviceInfo(),
+              StrataReactNativePlugin.getSafeAreaInsets(),
+              StrataReactNativePlugin.getPerformanceMode()
+            ]);
+            nativeInfo = info;
+            safeArea = insets;
+            performance = perf;
+          } catch (e2) {
+            console.error('Failed to get native device info', e2);
+          }
         }
       }
 
       setDeviceProfile(prev => ({
         ...prev,
+        ...nativeInfo,
         deviceType: (nativeInfo.deviceType as any) || 'mobile',
         orientation: height >= width ? 'portrait' : 'landscape',
         screenWidth: width,
@@ -138,6 +150,27 @@ export function useInput(): InputSnapshot {
     triggers: { left: 0, right: 0 },
     touches: [],
   });
+
+  useEffect(() => {
+    if (!StrataReactNativePlugin || Platform.OS === 'web') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const snapshot = await StrataReactNativePlugin.getInputSnapshot();
+        if (snapshot) {
+          setInput(prev => ({
+            ...prev,
+            ...snapshot,
+            touches: prev.touches // Keep JS-side touches
+          }));
+        }
+      } catch (e) {
+        // Silently fail polling
+      }
+    }, 16); // ~60fps poll for native input
+
+    return () => clearInterval(interval);
+  }, []);
 
   return input;
 }
@@ -224,7 +257,11 @@ export function useHaptics(): { trigger: (options: HapticsOptions) => Promise<vo
     }
 
     if (StrataReactNativePlugin) {
-      await StrataReactNativePlugin.triggerHaptic(options.intensity || 'medium');
+      if (StrataReactNativePlugin.triggerHaptics) {
+        await StrataReactNativePlugin.triggerHaptics(options);
+      } else {
+        await StrataReactNativePlugin.triggerHaptic(options.intensity || 'medium');
+      }
     }
   }, []);
 
@@ -244,7 +281,15 @@ export async function setOrientation(orientation: 'portrait' | 'landscape' | 'de
  * Hook for control hints based on device and input
  */
 export function useControlHints(): { movement: string; action: string; camera: string } {
-  const { inputMode } = useDevice();
+  const { inputMode, hasGamepad } = useDevice();
+  
+  if (hasGamepad || inputMode === 'gamepad') {
+    return {
+      movement: 'Left Stick',
+      action: 'Button A / X',
+      camera: 'Right Stick'
+    };
+  }
   
   if (inputMode === 'touch') {
     return {
