@@ -1,5 +1,4 @@
-import type React from 'react';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { 
   NativeModules, 
   Platform, 
@@ -84,7 +83,7 @@ export function useDevice(): DeviceProfile {
     const updateDeviceInfo = async () => {
       const { width, height } = Dimensions.get('window');
       
-      let nativeInfo: DeviceProfile | { deviceType: string, platform: string } = { deviceType: 'mobile', platform: Platform.OS };
+      let nativeInfo: any = { deviceType: 'mobile', platform: Platform.OS };
       let safeArea = { top: 0, right: 0, bottom: 0, left: 0 };
       let performance = { mode: 'high' };
 
@@ -98,7 +97,7 @@ export function useDevice(): DeviceProfile {
           nativeInfo = profile;
           safeArea = profile.safeAreaInsets || { top: 0, right: 0, bottom: 0, left: 0 };
           performance = { mode: profile.performanceMode || profile.mode || 'high' };
-        } catch (_e) {
+        } catch (e) {
           try {
             const [info, insets, perf] = await Promise.all([
               StrataReactNativePlugin.getDeviceInfo(),
@@ -117,13 +116,12 @@ export function useDevice(): DeviceProfile {
       setDeviceProfile(prev => ({
         ...prev,
         ...nativeInfo,
-        platform: (nativeInfo.platform as DeviceProfile['platform']) || prev.platform,
-        deviceType: (nativeInfo.deviceType as DeviceProfile['deviceType']) || 'mobile',
+        deviceType: (nativeInfo.deviceType as any) || 'mobile',
         orientation: height >= width ? 'portrait' : 'landscape',
         screenWidth: width,
         screenHeight: height,
         safeAreaInsets: safeArea || { top: 0, right: 0, bottom: 0, left: 0 },
-        performanceMode: (performance.mode as DeviceProfile['performanceMode']) || 'high',
+        performanceMode: (performance.mode as any) || 'high',
       }));
     };
 
@@ -166,7 +164,7 @@ export function useInput(): InputSnapshot {
             touches: prev.touches // Keep JS-side touches
           }));
         }
-      } catch (_e) {
+      } catch (e) {
         // Silently fail polling
       }
     }, 16); // ~60fps poll for native input
