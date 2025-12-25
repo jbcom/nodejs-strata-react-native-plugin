@@ -4,12 +4,16 @@ import { NativeModules } from 'react-native';
 
 jest.mock('react-native', () => ({
   NativeModules: {
-    StrataReactNativePlugin: {
-      getDeviceInfo: jest.fn(),
-      getSafeAreaInsets: jest.fn(),
-      getPerformanceMode: jest.fn(),
+    RNStrata: {
+      getDeviceDetails: jest.fn(),
+      getGamepadSnapshot: jest.fn(),
+      triggerHaptic: jest.fn(),
     },
   },
+  NativeEventEmitter: jest.fn(() => ({
+    addListener: jest.fn(),
+    removeListeners: jest.fn(),
+  })),
   Platform: {
     OS: 'ios',
     select: jest.fn(obj => obj.ios),
@@ -25,13 +29,20 @@ jest.mock('react-native', () => ({
 
 describe('useDevice', () => {
   it('should return initial device profile', async () => {
-    const mockInfo = { deviceType: 'mobile', platform: 'ios' };
-    const mockInsets = { top: 47, right: 0, bottom: 34, left: 0 };
-    const mockPerf = { mode: 'high' };
+    const mockDetails = { 
+      deviceType: 'mobile', 
+      platform: 'ios',
+      inputMode: 'touch',
+      orientation: 'portrait',
+      hasTouch: true,
+      hasGamepad: false,
+      screenWidth: 390,
+      screenHeight: 844,
+      pixelRatio: 3,
+      safeAreaInsets: { top: 47, right: 0, bottom: 34, left: 0 }
+    };
 
-    (NativeModules.StrataReactNativePlugin.getDeviceInfo as jest.Mock).mockResolvedValue(mockInfo);
-    (NativeModules.StrataReactNativePlugin.getSafeAreaInsets as jest.Mock).mockResolvedValue(mockInsets);
-    (NativeModules.StrataReactNativePlugin.getPerformanceMode as jest.Mock).mockResolvedValue(mockPerf);
+    (NativeModules.RNStrata.getDeviceDetails as jest.Mock).mockResolvedValue(mockDetails);
 
     const { result, waitForNextUpdate } = renderHook(() => useDevice());
 
@@ -40,7 +51,7 @@ describe('useDevice', () => {
     
     await waitForNextUpdate();
 
-    expect(result.current.safeAreaInsets).toEqual(mockInsets);
-    expect(result.current.performanceMode).toBe('high');
+    expect(result.current.safeAreaInsets).toEqual(mockDetails.safeAreaInsets);
+    expect(result.current.deviceType).toBe('mobile');
   });
 });

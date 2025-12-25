@@ -90,3 +90,4 @@ Full documentation is available in the [docs](./docs) directory.
 ## License
 
 MIT
+\n\n<!-- CI trigger -->
