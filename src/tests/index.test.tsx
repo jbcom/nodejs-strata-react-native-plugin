@@ -15,7 +15,7 @@ jest.mock('react-native', () => ({
   },
   Platform: {
     OS: 'ios',
-    select: jest.fn((obj: Record<string, any>) => obj.ios),
+    select: jest.fn((obj: Record<string, unknown>) => obj.ios),
   },
   Dimensions: {
     get: jest.fn(() => ({ width: 390, height: 844 })),

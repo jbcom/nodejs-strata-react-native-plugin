@@ -272,7 +272,7 @@ export function useHaptics(): { trigger: (options: HapticsOptions) => Promise<vo
  * Set screen orientation
  */
 export async function setOrientation(orientation: 'portrait' | 'landscape' | 'default'): Promise<void> {
-  if (Plugin && Plugin.setOrientation) {
+  if (Plugin?.setOrientation) {
     await Plugin.setOrientation(orientation);
   }
 }
