@@ -1,22 +1,21 @@
-import { renderHook } from '@testing-library/react-hooks/native';
+import { renderHook } from '@testing-library/react-hooks';
 import { useDevice } from '../index';
 import { NativeModules } from 'react-native';
 
 jest.mock('react-native', () => ({
   NativeModules: {
-    RNStrata: {
-      getDeviceDetails: jest.fn(),
-      getGamepadSnapshot: jest.fn(),
-      triggerHaptic: jest.fn(),
+    StrataModule: {
+      getDeviceProfile: jest.fn(),
     },
+    StrataReactNativePlugin: {
+      getDeviceInfo: jest.fn(),
+      getSafeAreaInsets: jest.fn(),
+      getPerformanceMode: jest.fn(),
+    }
   },
-  NativeEventEmitter: jest.fn(() => ({
-    addListener: jest.fn(),
-    removeListeners: jest.fn(),
-  })),
   Platform: {
     OS: 'ios',
-    select: jest.fn(obj => obj.ios),
+    select: jest.fn((obj: Record<string, any>) => obj.ios),
   },
   Dimensions: {
     get: jest.fn(() => ({ width: 390, height: 844 })),
@@ -28,26 +27,24 @@ jest.mock('react-native', () => ({
 }));
 
 describe('useDevice', () => {
-  it('should return initial device profile', () => {
-    const mockDetails = { 
+  it('should return initial device profile', async () => {
+    const mockProfile = { 
       deviceType: 'mobile', 
       platform: 'ios',
-      inputMode: 'touch',
-      orientation: 'portrait',
-      hasTouch: true,
-      hasGamepad: false,
-      screenWidth: 390,
-      screenHeight: 844,
-      pixelRatio: 3,
-      safeAreaInsets: { top: 47, right: 0, bottom: 34, left: 0 }
+      safeAreaInsets: { top: 47, right: 0, bottom: 34, left: 0 },
+      performanceMode: 'high'
     };
 
-    (NativeModules.RNStrata.getDeviceDetails as jest.Mock).mockResolvedValue(mockDetails);
+    (NativeModules.StrataModule.getDeviceProfile as jest.Mock).mockResolvedValue(mockProfile);
 
-    const { result } = renderHook(() => useDevice());
+    const { result, waitForNextUpdate } = renderHook(() => useDevice());
 
-    // Initial state
+    // Initial state (before useEffect)
     expect(result.current.platform).toBe('ios');
-    expect(result.current.hasTouch).toBe(true);
+    
+    await waitForNextUpdate();
+
+    expect(result.current.safeAreaInsets).toEqual(mockProfile.safeAreaInsets);
+    expect(result.current.performanceMode).toBe('high');
   });
 });

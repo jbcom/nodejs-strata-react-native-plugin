@@ -1,6 +1,12 @@
 package com.strata.reactnative
 
 import com.facebook.react.bridge.*
+import android.content.Context
+import android.content.pm.ActivityInfo
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 
 
 /**
@@ -26,8 +32,60 @@ class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
             putDouble("screenHeight", getScreenHeight())
             putDouble("pixelRatio", getPixelRatio())
             putMap("safeAreaInsets", getSafeAreaInsets())
+            putString("performanceMode", getPerformanceModeInternal())
         }
         promise.resolve(result)
+    }
+
+    private fun getPerformanceModeInternal(): String {
+        var isLowPowerMode = false
+        val powerManager = reactApplicationContext.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        if (powerManager != null) {
+            isLowPowerMode = powerManager.isPowerSaveMode
+        }
+
+        val mi = android.app.ActivityManager.MemoryInfo()
+        val activityManager = reactApplicationContext.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        activityManager?.getMemoryInfo(mi)
+        
+        return if (isLowPowerMode || mi.totalMem < 2L * 1024 * 1024 * 1024) {
+            "low"
+        } else if (mi.totalMem < 4L * 1024 * 1024 * 1024) {
+            "medium"
+        } else {
+            "high"
+        }
+    }
+
+    @ReactMethod
+    fun getPerformanceMode(promise: Promise) {
+        val map = Arguments.createMap()
+        
+        var isLowPowerMode = false
+        val powerManager = reactApplicationContext.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        if (powerManager != null) {
+            isLowPowerMode = powerManager.isPowerSaveMode
+        }
+
+        val mi = android.app.ActivityManager.MemoryInfo()
+        val activityManager = reactApplicationContext.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        activityManager?.getMemoryInfo(mi)
+        
+        map.putString("mode", getPerformanceModeInternal())
+        map.putBoolean("isLowPowerMode", isLowPowerMode)
+        map.putDouble("totalMemory", mi.totalMem.toDouble())
+        promise.resolve(map)
+    }
+
+    @ReactMethod
+    fun setOrientation(orientation: String) {
+        val currentActivity = currentActivity ?: return
+        val orientationConstant = when (orientation) {
+            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        currentActivity.requestedOrientation = orientationConstant
     }
     
     /**
@@ -49,16 +107,28 @@ class StrataModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
                 return
             }
             
-            val effect = when (intensity) {
-                "light" -> VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE)
-                "heavy" -> VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE)
-                else -> VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE) // medium
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val effect = when (intensity) {
+                    "light" -> VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE)
+                    "heavy" -> VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE)
+                    else -> VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE) // medium
+                }
+                vibrator.vibrate(effect)
+            } else {
+                @Suppress("DEPRECATION")
+                val duration = when (intensity) {
+                    "light" -> 50L
+                    "heavy" -> 200L
+                    else -> 100L
+                }
+                vibrator.vibrate(duration)
             }
             
-            vibrator.vibrate(effect)
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("HAPTICS_ERROR", "Failed to trigger haptics: ${e.message}")
+        } catch (e: Error) {
+            promise.reject("HAPTICS_ERROR", "Critical error triggering haptics: ${e.message}")
         }
     }
     

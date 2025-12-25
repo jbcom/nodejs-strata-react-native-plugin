@@ -1,6 +1,5 @@
 import Foundation
 import UIKit
-import CoreHaptics
 
 /**
  * Strata React Native module for iOS.
@@ -9,24 +8,6 @@ import CoreHaptics
  */
 @objc(StrataModule)
 class StrataModule: NSObject {
-    
-    private var hapticEngine: CHHapticEngine?
-    
-    override init() {
-        super.init()
-        setupHaptics()
-    }
-    
-    private func setupHaptics() {
-        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
-        
-        do {
-            hapticEngine = try CHHapticEngine()
-            try hapticEngine?.start()
-        } catch {
-            print("Haptics error: \(error)")
-        }
-    }
     
     @objc
     static func requiresMainQueueSetup() -> Bool {
@@ -50,10 +31,61 @@ class StrataModule: NSObject {
                 "screenWidth": screen.bounds.width,
                 "screenHeight": screen.bounds.height,
                 "pixelRatio": screen.scale,
-                "safeAreaInsets": self.getSafeAreaInsets()
+                "safeAreaInsets": self.getSafeAreaInsets(),
+                "performanceMode": self.getPerformanceModeInternal()
             ]
             
             resolve(result)
+        }
+    }
+    
+    private func getPerformanceModeInternal() -> String {
+        let isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+        if isLowPowerMode {
+            return "low"
+        }
+        
+        let physicalMemory = ProcessInfo.processInfo.physicalMemory
+        if physicalMemory < 2 * 1024 * 1024 * 1024 {
+            return "low"
+        } else if physicalMemory < 4 * 1024 * 1024 * 1024 {
+            return "medium"
+        }
+        
+        return "high"
+    }
+
+    @objc
+    func getPerformanceMode(_ resolve: @escaping RCTPromiseResolveBlock,
+                           reject: @escaping RCTPromiseRejectBlock) {
+        let isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+        
+        resolve([
+            "mode": self.getPerformanceModeInternal(),
+            "isLowPowerMode": isLowPowerMode,
+            "totalMemory": ProcessInfo.processInfo.physicalMemory
+        ])
+    }
+
+    @objc
+    func setOrientation(_ orientation: String) {
+        DispatchQueue.main.async {
+            var orientationValue: UIInterfaceOrientation = .unknown
+            if orientation == "portrait" {
+                orientationValue = .portrait
+            } else if orientation == "landscape" {
+                orientationValue = .landscapeLeft
+            }
+            
+            if #available(iOS 16.0, *) {
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                    let window = windowScene.windows.first
+                    window?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
+            } else {
+                UIDevice.current.setValue(orientationValue.rawValue, forKey: "orientation")
+                UIViewController.attemptRotationToDeviceOrientation()
+            }
         }
     }
     

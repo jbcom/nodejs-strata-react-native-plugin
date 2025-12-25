@@ -2,7 +2,6 @@ import type React from 'react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { 
   NativeModules, 
-  NativeEventEmitter,
   Platform, 
   Dimensions, 
   PixelRatio, 
@@ -10,13 +9,12 @@ import {
   type GestureResponderEvent
 } from 'react-native';
 
-const { RNStrata } = NativeModules;
+const { StrataModule, StrataReactNativePlugin } = NativeModules;
+const Plugin = StrataModule || StrataReactNativePlugin;
 
-if (!RNStrata && Platform.OS === 'ios') {
-  console.warn('RNStrata: Native module not found. Check your native installation.');
+if (!Plugin && Platform.OS !== 'web') {
+  console.warn('StrataModule: Native module not found. Check your native installation.');
 }
-
-const eventEmitter = RNStrata ? new NativeEventEmitter(RNStrata) : null;
 
 export interface DeviceProfile {
   deviceType: 'mobile' | 'tablet' | 'foldable' | 'desktop';
@@ -56,8 +54,7 @@ export interface InputSnapshot {
 }
 
 export interface HapticsOptions {
-  type?: 'impact' | 'notification' | 'selection';
-  intensity?: 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error';
+  intensity?: 'light' | 'medium' | 'heavy';
   customIntensity?: number;
   duration?: number;
   pattern?: number[];
@@ -86,25 +83,46 @@ export function useDevice(): DeviceProfile {
 
   useEffect(() => {
     const updateDeviceInfo = async () => {
-      if (Platform.OS === 'ios' && RNStrata) {
+      const { width, height } = Dimensions.get('window');
+      
+      let nativeInfo: Partial<DeviceProfile> = { 
+        deviceType: 'mobile', 
+        platform: Platform.OS as 'ios' | 'android' | 'web' 
+      };
+
+      if (Plugin) {
         try {
-          const details = await RNStrata.getDeviceDetails();
-          setDeviceProfile({
-            ...details,
-            performanceMode: 'high', // Default for now as not in RNStrata yet
-          });
+          // Try modern getDeviceProfile first
+          if (Plugin.getDeviceProfile) {
+            nativeInfo = await Plugin.getDeviceProfile();
+          } else {
+            // Fallback to individual calls
+            const [info, insets, perf] = await Promise.all([
+              Plugin.getDeviceInfo ? Plugin.getDeviceInfo() : Promise.resolve({}),
+              Plugin.getSafeAreaInsets ? Plugin.getSafeAreaInsets() : Promise.resolve({}),
+              Plugin.getPerformanceMode ? Plugin.getPerformanceMode() : Promise.resolve({})
+            ]);
+            nativeInfo = {
+              ...info,
+              safeAreaInsets: insets,
+              performanceMode: perf.mode || perf.performanceMode
+            };
+          }
         } catch (e) {
-          console.error('Failed to get native device details', e);
+          console.error('Failed to get native device info', e);
         }
-      } else {
-        const { width, height } = Dimensions.get('window');
-        setDeviceProfile(prev => ({
-          ...prev,
-          screenWidth: width,
-          screenHeight: height,
-          orientation: height >= width ? 'portrait' : 'landscape',
-        }));
       }
+
+      setDeviceProfile(prev => ({
+        ...prev,
+        ...nativeInfo,
+        deviceType: (nativeInfo.deviceType as DeviceProfile['deviceType']) || 'mobile',
+        orientation: height >= width ? 'portrait' : 'landscape',
+        screenWidth: width,
+        screenHeight: height,
+        platform: Platform.OS as 'ios' | 'android' | 'web',
+        performanceMode: (nativeInfo.performanceMode as DeviceProfile['performanceMode']) || 'high',
+      }));
     };
 
     updateDeviceInfo();
@@ -134,27 +152,24 @@ export function useInput(): InputSnapshot {
   });
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (Platform.OS === 'ios' && RNStrata) {
-      interval = setInterval(async () => {
-        try {
-          const snapshot = await RNStrata.getGamepadSnapshot();
-          if (snapshot) {
-            setInput(prev => ({
-              ...snapshot,
-              touches: prev.touches, // Preserve touches from provider
-            }));
-          }
-        } catch (_e) {
-          // Ignore gamepad errors in poll
-        }
-      }, 16); // ~60fps
-    }
+    if (!Plugin || Platform.OS === 'web' || !Plugin.getInputSnapshot) return;
 
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    const interval = setInterval(async () => {
+      try {
+        const snapshot = await Plugin.getInputSnapshot();
+        if (snapshot) {
+          setInput(prev => ({
+            ...prev,
+            ...snapshot,
+            touches: prev.touches // Keep JS-side touches
+          }));
+        }
+      } catch (_e) {
+        // Silently fail polling
+      }
+    }, 16); // ~60fps poll for native input
+
+    return () => clearInterval(interval);
   }, []);
 
   return input;
@@ -235,14 +250,18 @@ export const StrataInputProvider: React.FC<{
 export function useHaptics(): { trigger: (options: HapticsOptions) => Promise<void> } {
   const trigger = useCallback(async (options: HapticsOptions) => {
     if (Platform.OS === 'web') {
-      if ('vibrate' in navigator) {
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
         navigator.vibrate(options.duration || 50);
       }
       return;
     }
 
-    if (Platform.OS === 'ios' && RNStrata) {
-      RNStrata.triggerHaptic(options.type || 'impact', options);
+    if (Plugin) {
+      if (Plugin.triggerHaptics) {
+        await Plugin.triggerHaptics(options.intensity || 'medium');
+      } else if (Plugin.triggerHaptic) {
+        await Plugin.triggerHaptic(options.intensity || 'medium');
+      }
     }
   }, []);
 
@@ -252,9 +271,10 @@ export function useHaptics(): { trigger: (options: HapticsOptions) => Promise<vo
 /**
  * Set screen orientation
  */
-export async function setOrientation(_orientation: 'portrait' | 'landscape' | 'default'): Promise<void> {
-  // Not implemented in RNStrata yet, but keeping the API
-  console.warn('setOrientation is not yet implemented in RNStrata');
+export async function setOrientation(orientation: 'portrait' | 'landscape' | 'default'): Promise<void> {
+  if (Plugin && Plugin.setOrientation) {
+    await Plugin.setOrientation(orientation);
+  }
 }
 
 /**
@@ -284,14 +304,4 @@ export function useControlHints(): { movement: string; action: string; camera: s
     action: 'Space / Button A',
     camera: 'Mouse / Right Stick'
   };
-}
-
-/**
- * Subscribe to gamepad connection events
- */
-export function onGamepadUpdate(callback: (event: { connected: boolean }) => void) {
-  if (eventEmitter) {
-    return eventEmitter.addListener('onGamepadUpdate', callback);
-  }
-  return null;
 }
