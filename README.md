@@ -1,6 +1,13 @@
-# @jbcom/strata-react-native-plugin
+# @strata/react-native-plugin
 
-React Native plugin for [Strata 3D](https://github.com/jbcom/nodejs-strata) - cross-platform input, device detection, and haptics for mobile games.
+[![npm version](https://img.shields.io/npm/v/@strata/react-native-plugin.svg)](https://www.npmjs.com/package/@strata/react-native-plugin)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## 🏢 Enterprise Context
+
+**Strata** is the Games & Procedural division of the [jbcom enterprise](https://jbcom.github.io). This plugin is part of a coherent suite of specialized tools, sharing a unified design system and interconnected with sibling organizations like [Agentic](https://agentic.dev) and [Extended Data](https://extendeddata.dev).
+
+React Native plugin for [Strata 3D](https://strata.game) - cross-platform input, device detection, and haptics for mobile games.
 
 ## Features
 
@@ -83,9 +90,9 @@ Full documentation is available in the [docs](./docs) directory.
 
 ## Related
 
-- [@jbcom/strata](https://github.com/jbcom/nodejs-strata) - Main library
-- [@jbcom/strata-capacitor-plugin](https://github.com/jbcom/nodejs-strata-capacitor-plugin) - Capacitor version
-- [@jbcom/strata-examples](https://github.com/jbcom/nodejs-strata-examples) - Example applications
+- [@strata/core](https://strata.game) - Main library
+- [@strata/capacitor-plugin](https://github.com/strata-game-library/capacitor-plugin) - Capacitor version
+- [@strata/examples](https://github.com/strata-game-library/examples) - Example applications
 
 ## License
 
